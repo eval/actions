@@ -20,6 +20,6 @@ jobs:
         uses: eval/actions/strip-polar-paywall@main
         with:
           org: eval
-          days-since-publish: 0
+          days-sifactionnce-publish: 0
         env:
           POLAR_API_TOKEN: ${{ secrets.POLAR_API_TOKEN }}
