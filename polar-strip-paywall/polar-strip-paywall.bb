@@ -66,7 +66,7 @@
         (cli/format-opts (assoc cli-spec :order [:org :days-since-publish :dry-run :help]))
         \newline \newline
         "ENVIRONMENT VARIABLES" \newline
-        "  POLAR_TOKEN    token from settings"
+        "  POLAR_API_TOKEN    token from settings"
         \newline)))
 
 (defn -main [{:keys [days-since-publish] :as args}]
@@ -78,17 +78,18 @@
          (map #(update % :body strip-paywall))
          (mapv (partial update-article! args)))))
 
-
 (when (= *file* (System/getProperty "babashka.file"))
-  (let [help-spec  {:spec {:help (get-in cli-spec [:spec :help])}}
-        parse-args #(cli/parse-opts *command-line-args* %1)]
-    (if (:help (parse-args help-spec))
+  (let [help-spec   {:spec {:help (get-in cli-spec [:spec :help])}}
+        parse-args  #(cli/parse-opts *command-line-args* %1)
+        print-help? ((some-fn empty? :help) (parse-args help-spec))]
+    (if print-help?
       (print-help)
       (-main (parse-args cli-spec)))))
 
 
 (comment
 
+  (cli/parse-opts '() {:spec {:help (get-in cli-spec [:spec :help])}})
   (put-article {:id "7891ada6-f2d0-46f7-b217-0719e784ecbc" :body "Hello"})
 
   #_:end)
