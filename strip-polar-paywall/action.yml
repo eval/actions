@@ -1,0 +1,25 @@
+name: 'StripPaywall'
+description: 'Strips paywall from articles x days after publish.'
+
+branding:
+  icon: scissors
+  color: red
+
+inputs:
+  org:
+    description: Organization name on GitHub
+    required: true
+  days_since_publish:
+    description: 'Amount of days since publication of article after which paywalls will be stripped'
+    default: 7
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install clojure tools
+      uses: DeLaGuardo/setup-clojure@9.4
+      with:
+        bb: latest
+    - name: Run
+      run: bb ${{ github.action_path }}/strip-polar-paywall.bb --org ${{ inputs.org }} --days-since-publish ${{ inputs.days_since_publish }}
+      shell: bash
