@@ -62,7 +62,7 @@
 
 (defn print-help []
   (println
-   (str "Usage: strip-polar-paywall [OPTIONS] \n\nOPTIONS\n"
+   (str "Usage: polar-strip-paywall [OPTIONS] \n\nOPTIONS\n"
         (cli/format-opts (assoc cli-spec :order [:org :days-since-publish :dry-run :help]))
         \newline \newline
         "ENVIRONMENT VARIABLES" \newline

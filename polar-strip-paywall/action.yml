@@ -1,5 +1,5 @@
 name: 'StripPaywall'
-description: 'Strips paywall from articles x days after publish.'
+description: 'Strips paywall from articles X days after publication.'
 
 branding:
   icon: scissors
@@ -21,5 +21,5 @@ runs:
       with:
         bb: latest
     - name: Run
-      run: bb ${{ github.action_path }}/strip-polar-paywall.bb --org ${{ inputs.org }} --days-since-publish ${{ inputs.days-since-publish }}
+      run: bb ${{ github.action_path }}/polar-strip-paywall.bb --org ${{ inputs.org }} --days-since-publish ${{ inputs.days-since-publish }}
       shell: bash
