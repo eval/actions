@@ -14,8 +14,6 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-22.04
     steps:
-      - name: Check out code
-        uses: actions/checkout@v3
       - name: StripIt
         uses: eval/actions/strip-polar-paywall@main
         with:
