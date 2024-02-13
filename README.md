@@ -23,4 +23,5 @@ jobs:
           POLAR_API_TOKEN: ${{ secrets.POLAR_API_TOKEN }}
 ```
 
-See also this [dogfooding workflow](https://github.com/eval/actions/blob/main/.github/workflows/polar-strip-paywall.yml).
+See also this [dogfooding workflow](https://github.com/eval/actions/blob/main/.github/workflows/polar-strip-paywall.yml).  
+See [CLI documentation](./polar-strip-paywall/README.md).
