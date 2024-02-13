@@ -4,9 +4,9 @@ Collection of handy GitHub actions.
 
 ## Usage
 
-### Polar: strip paywall
+### [Polar](https://polar.sh/): strip paywall
 
-When publishing articles including a paywall (as benefit for paying subscribers), this action will remove them after X days since publication.
+When publishing articles with paywalled snippets (as benefit for paying subscribers), this action will remove them after X days since publication.
 
 ``` yaml
 jobs:
