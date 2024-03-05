@@ -8,6 +8,7 @@
 ;; Polar API
 ;;
 (defn get-articles [{:keys [org show_unpublished] :as _cli-opts}]
+  {:pre [(some? org)]}
   (-> "https://api.polar.sh/api/v1/articles/search"
       (http/get {:query-params {:show_unpublished  (boolean show_unpublished)
                                 :organization_name org
@@ -24,30 +25,16 @@
 
 ;; helpers
 ;;
-(defn whenp [v & preds]
-  (when ((apply every-pred preds) v)
-    v))
+(defn whenp
+  "Yields `v` when it's truthy and all `(pred v)` are truthy as well.
 
-
-(letfn [(camel->kebab [s]
-          (-> s
-              (str/replace #"[A-Z]" (comp #(str "-" %) str/lower-case))
-              (str/replace #"^-|-$" "")))]
-  (defn re-named-captures
-    "Yields captures by group name.
-
-    Examples:
-    (re-named-captures #\"(?<foo>Foo)\" \"Foo\") ;; => {\"foo\" \"Foo\"}
-  "
-    ([re s] (re-named-captures re s nil))
-    ([re s {:keys [keywordize] :or {keywordize identity}}]
-     (let [keywordize-fn (if (true? keywordize) (comp keyword camel->kebab) keywordize)]
-       (when-let [matching (whenp (re-matcher re s) re-find)]
-         (reduce (fn [acc [group _]]
-                   (if-let [captured (.group ^java.util.regex.Matcher matching group)]
-                     (assoc acc (keywordize-fn group) captured)
-                     acc))
-                 {} (.namedGroups re)))))))
+  Examples:
+  (whenp 1 odd? pos?) ;; => 1
+  (whenp coll seq) ;; =>  nil or a collection with at least 1 item"
+  ([v] v)
+  ([v & preds]
+   (when (and v ((apply every-pred preds) v))
+     v)))
 
 (defn snippet-atts [snippet]
   (when-let [[_ atts]    (re-find #"<!-- +[A-Z-_]+ (.+) -->" snippet)]
@@ -62,61 +49,19 @@
          (assoc acc k v))
        {} att-matches))))
 
-(comment
-  (re-seq #"(?x)
-                             (?<key>[^=]+)
-                             (?:=)
-                             (?<quote>\")?
-                             (?<val>[^\"]+)(?:\k<quote>?)\ *"
-          #_"tags=\"Clojure, TIL, Babashka\"  alles=1"
-          (second (re-find #"<!-- +[A-Z-_]+ (.+) -->" "<!-- POLAR-TAGS tags=\"Clojure, TIL, Babashka\" alles=1 -->"))))
+(defn tag->md-link [base-url tag]
+  (let [tag->anchor (fn [t] (-> t str/lower-case (str/replace  #" " "-")))]
+    (str "[#" tag "](" base-url (tag->anchor tag) ")")))
 
-(defn body-parts [{:keys [body]} marker]
-  (let [snippet-re (str "<!--\\ (?<marker>" marker ")\\ [^-]*-->")]
-    (when (re-find (re-pattern snippet-re) body)
-      (re-named-captures
-       (re-pattern (str "(?sx) # '<before><!-- marker --><middle><!-- marker-END --><after>'
-                     (?<before>.*)
-                     (?<snippet>             # capture '<!-- POLAR-TAGS tags=\"git,Clojure\" -->'
-                       (?<!```[^\\n]*\\n)  # unless preseded by codeblock-markers
-                       <!--\\ (?<marker>" marker ")\\ [^-]*-->)
-                     (?:
-                       (?<middle>.*) # absent when snippet just inserted
-                       <!--\\ " marker "-END\\ -->)?
-                     (?<after>.*)
-                    ")) body {:keywordize true}))))
 
-(defn inner-tags-block [tags]
-  (let [tag-anchor   (fn [t] (-> t str/lower-case (str/replace  #" " "-")))
-        tag->md-link #(str "[#" % "](https://polar.sh/eval/posts/articles-by-tag#" (tag-anchor %) ")")]
-    (str "**Tags:** " (str/join ", " (map tag->md-link tags)))))
-
-(defn insert-block [{:keys [before snippet after marker] :as _parts} inner-block]
-  (let [close-snippet (str "<!-- " marker "-END -->")]
-    (str before \newline
-         snippet \newline
-         \newline
-         inner-block \newline
-         \newline
-         close-snippet after)))
-
-(defn insert-tags-block [article]
-  (when-let [{:keys [snippet] :as parts} (body-parts article "POLAR-TAGS")]
-    (when-let [tags-str (not-empty (get (snippet-atts snippet) "tags"))]
-      (let [tags (str/split tags-str #" *, *")]
-        (assoc article :body (insert-block parts (inner-tags-block tags)))))))
-
+(defn inner-tags-block [tags {:keys [tag-base-url]}]
+  (str "**Tags:** " (str/join ", " (map #(tag->md-link tag-base-url %) tags))))
 
 ;; lexer
+;;
 (def code-fences "```")
 (def snippet-open "<!--")
 (def snippet-close "-->")
-#_(def variable-end "}}")
-#_(def block-start "{%")
-#_(def block-end "%}")
-#_(def argument-div ":")
-#_(def pipe "|")
-
 
 (defn- read-char
   "Advance `:pos` by `n` while not exceeding `(count input)`."
@@ -236,6 +181,8 @@
 (defn tokenize [s]
   (:tokens (tokenize* s)))
 
+;; /lexer
+
 (defn blocks [tokens marker]
   (let [snippet?           (comp #(= % :snippet) :t)
         containing-marker? (comp #(re-find (re-pattern (str "<!-- " marker)) %) :v)
@@ -258,22 +205,20 @@
   (let [make-filler       #(hash-map :t :filler :start %1 :end %2 :v (subs body %1 %2))
         including-fillers (->> blocks
                                (partition 2 1 (list {}))
-                               (reduce (fn [acc [{s1e :end :as s1} {s2s :start :as s2}]]
+                               (reduce (fn [acc [{s1e :end :as s1} {s2s :start :as _s2}]]
                                          (let [item (cond-> (vector s1)
                                                       (and s2s (not= s1e s2s)) (conj (make-filler s1e s2s)))]
                                            (apply conj acc item))) []))
-        min-start         (whenp (some->> including-fillers
-                                          not-empty
-                                          (apply min-key :start)
-                                          :start)
-                                 some?
-                                 pos?)
-        max-end           (whenp (some->> including-fillers
-                                          not-empty
-                                          (apply max-key :end)
-                                          :end)
-                                 some?
-                                 #(not= % (count body)))
+        min-start         (some-> including-fillers
+                                  not-empty
+                                  (->> (apply min-key :start))
+                                  :start
+                                  (whenp pos?))
+        max-end           (some-> including-fillers
+                                  not-empty
+                                  (->> (apply max-key :end))
+                                  :end
+                                  (whenp #(not= % (count body))))
         leading-snippet   (when min-start (make-filler 0 min-start))
         trailing-snippet  (when max-end (make-filler max-end (count body)))]
     (cond-> including-fillers
@@ -288,10 +233,10 @@
           (get "tags")
           (str/split #", *")))
 
-(defn expand-tags-snippet [s]
+(defn expand-tags-snippet [s opts]
   (when-let [tags (snippet->tags s)]
     (str s \newline
-         (inner-tags-block tags) \newline
+         (inner-tags-block tags opts) \newline
          "<!-- POLAR-TAGS-END -->")))
 
 (defn- article-url [{:keys          [slug]
@@ -311,12 +256,12 @@
          "<!-- POLAR-TAGS-LIST-END -->")))
 
 (defn expand-polar-tags-snippets
-  "Expands all '<!-- POLAR-TAGS tags=\"a\" -->' in `body`.
-  Yields `nil` if there's nothing to expand."
-  [body]
+  "Expands all '<!-- POLAR-TAGS tags=\"a\" -->' in `body`."
+  [body opts]
   (if-let [vals (not-empty (-> (tokenize body)
                                (blocks "POLAR-TAGS")
-                               (->> (mapv #(update % :v expand-tags-snippet))
+                               (->> (mapv (fn [b]
+                                            (update b :v #(expand-tags-snippet % opts))))
                                     (filter :v))
                                (complete-blocks body)
                                (->> (map :v))))]
@@ -324,8 +269,7 @@
     body))
 
 (defn expand-polar-tags-list-snippets
-  "Expands all '<!-- POLAR-TAGS tags=\"a\" -->' in `body`.
-  Yields `nil` if there's nothing to expand."
+  "Expands all '<!-- POLAR-TAGS-LIST -->' in `body`."
   [body articles-by-tag]
   (if-let [vals (not-empty (-> (tokenize body)
                                (blocks "POLAR-TAGS-LIST")
@@ -336,208 +280,22 @@
     (apply str vals)
     body))
 
-#_(println (expand-polar-tags-snippets (:body (last arts-after))))
-#_(defn expand-article-tags [article])
+(remove (comp namespace key) {::a 1 :foo 2 :b 3})
 
-(comment
-  (def arts (get-articles {:org "eval"}))
-
-  (let [article (nth arts 2)]
-    (println (expand-polar-tags-list-snippets (:body article) (articles-by-tag arts))))
-
-  (blocks (tokenize "Some introduction here
-<!-- POLAR-TAGS-LIST -->") "POLAR-TAGS-LIST")
-
-  (expand-polar-tags-list-snippets "Some introduction here
-<!-- POLAR-TAGS-LIST -->" {"Clojure" [{:title "Article 1"}]})
-  (complete-blocks [{:start 0, :t :snippet, :v "<!-- POLAR-TAGS tags=\"foo\" -->", :end 30} {:start 31, :t :snippet, :v "<!-- POLAR-TAGS tags=\"bar\" -->", :end 60}])
-  ;; snippet:
-  ;; [{:pos 0}]
-  ;; block-positions
-
-  (max-key :p [{:p 3} {:p 2}])
-
-  (let [body "Hello! ```clojure
-<!-- POLAR-TAGS tags=\"Clojure, babashka\" a=\"moar\" -->
-```
-<!-- POLAR-TAGS tags=\"Clojure, babashka\" a=\"moar\" -->
-Tags: link1, link2
-<!-- POLAR-TAGS-END -->
-
-<!-- POLAR-TAGS tags=\"foo\" -->
-
-Even more here
-"
-        body         "Hello!<!-- POLAR-TAGS tags=\"foo,bar\" --> <!-- POLAR-TAGS tags=\"bar\" -->"
-        #_#_body "Hello!<!-- POLAR-TAGS tags=\"foo,bar\" -->\nTags: [#foo](https://polar.sh/eval/posts/articles-by-tag#foo), [#bar](https://polar.sh/eval/posts/articles-by-tag#bar)\n<!-- POLAR-TAGS-END --> <!-- POLAR-TAGS tags=\"bar\" -->\nTags: [#bar](https://polar.sh/eval/posts/articles-by-tag#bar)\n<!-- POLAR-TAGS-END -->"
-        #_#_body "<!-- POLAR-TAGS tags=\"foo,bar\" -->\nTags: [#foo](https://polar.sh/eval/posts/articles-by-tag#foo), [#bar](https://polar.sh/eval/posts/articles-by-tag#bar)\n<!-- POLAR-TAGS-END -->"
-        body "Hello"
-        blocks           (blocks (:tokens (run (merge default-lexer {:input body}))) "POLAR-TAGS")
-        snippets         (complete-blocks (filter :v (mapv #(update % :v expand-tags-snippet) blocks))
-                                          body)
-        print-all        #(->> %
-                               (map :v)
-                               (apply str)
-                               #_println)
-        #_#_leading-snippet  (let [min-start (:start (apply min-key :start snippets))]
-                               {:v (subs body 0 min-start) :start 0 :end min-start})
-        #_#_trailing-snippet (let [max-end (:end (apply max-key :end snippets))]
-                               {:v (subs body max-end) :start max-end :end (count body)})
-        #_#_body-snippets    (sort-by :start (into [leading-snippet trailing-snippet] snippets))]
-    #_(conj (cons {:v (subs body 0 (:start (first (min-key :start positions))))} positions)
-            {:v (subs body (:start (first (max-key :end positions))))})
-    #_(println "----- Body ----")
-    #_(println body)
-    #_(println "----- Result ----")
-    #_(print-all snippets)
-
-    (apply min-key :v [{}])
-    blocks
-    #_(= body (print-all snippets))
-    #_blocks
-    #_(complete-blocks blocks body)
-    #_trailing-snippet
-    #_(apply max-key :end snippets)
-    #_(subs body 0 32)
-    #_(reduce (fn [{:keys [from to]}]
-                (subs)) body positions))
-
-  (def bl *1)
-  (blocks bl)
-  ((comp #(some->> % (re-find (re-pattern (str "POLAR-TAGS-END")))) :v) (last bl))
-  (update {:start 32, :t :snippet, :v "<!-- POLAR-TAGS tags=\"a,b c\" -->", :end 119} :v expand-tags-snippet)
-
-  ;; lexer
-  ;; states
-  ;; - text
-  ;; - code
-  ;; - snippet
-  ;; - text
-
-  ;; glossary
-  ;; (open)snippet  <!-- POLAR-TAGS tags="foo, bar" -->
-  ;; closing snippet <!-- POLAR-TAGS-END -->
-  ;; (tags)block
-  ;; <!-- POLAR-TAGS -->
-  ;; Tags: 1, 2
-  ;; <!-- POLAR-TAGS-END -->
-
-  (body-insert {"before" "hello" "start" "<!--"})
-  ;; fetch 10 articles
-  ;;
-  ;;
-
-  (put-article (insert-tags-block art))
-  ;; gegeven een aantal tags
-  ;;
-
-  (tags-snippet ["git"])
-  (body-parts  "POLAR-TAGS")
-
-  (snippet-atts "<!-- POLAR-TAGS -->")
-  (def art *1)
-
-  (let [article (second arts)]
-    (when-let [parts (body-parts article "POLAR-TAGS")]
-      (assoc article :body (body-insert parts "hello"))))
-
-  (println (body-insert (body-parts {:body (body-insert {:marker "POLAR-TAGS", :start "<!-- POLAR-TAGS tags=\"Clojure, TIL, Babashka\" -->", :after "", :before "```html\n<!-- POLAR-TAGS tags=\"Clojure, TIL, Babashka\" -->\n```\n\n<hr />\n"} (tags-snippet ["git"]))} "POLAR-TAGS") (tags-snippet ["Clojure" "git"])))
-
-  (body-parts {:body "\n<!-- POLAR-TAGS-PAGE -->\n\n## #Clojure\n\n* [TIL #Clojure :reload-ing when :require-ing](https://polar.sh/eval/posts/til-clojure-reload-ing-when-require-ing) \n* [Let's write a templating library 🔎 Part 1: lexing](https://polar.sh/eval/posts/lets-write-a-templating-library-part-1-lexing)\n\n## #TIL\n\n* [TIL #Clojure :reload-ing when :require-ing](https://polar.sh/eval/posts/til-clojure-reload-ing-when-require-ing) \n\n<sub>Powered by...</sub>\n\n<!-- POLAR-TAGS-PAGE-END -->"} "POLAR-TAGS-PAGE")
-
-  (tags-snippet ["foo" "Rich Hickey"])
-
-  (replace-comment {:body "foobar\n<!-- POLAR-TAGS tags=\"git, \" a=\"1\" -->
-This will be replaced!
-<!-- POLAR-TAGS-END -->"} "POLAR-TAGS")
-
-  (str/replace "foobar\n<!-- POLAR-TAGS tags=\"git, \" a=\"1\" -->
-This will be replaced!
-<!-- POLAR-TAGS-END -->" #"(<!-- POLAR-TAGS.+-->).+(<!-- POLAR-TAGS-END -->)" "$1 replace $2")
-
-  (let [marker "POLAR-TAGS"
-        {:keys [pre open middle post] :as match}
-        (re-named-captures
-         (re-pattern
-          (str "(?sx)(?<pre>.*)(?<open>(?<!```[^\\n]*\\n)<!--\\ "
-               marker
-               "\\ [^-]+-->)(?:(?<middle>.*)<!--\\ "
-               marker "-END\\ -->)?(?<post>.*)")
-          #_(str "(?s)^(.*)((?<!```[^\n]*\n)<!-- "
-                 marker
-                 " [^-]+-->(?:(.*)<!-- "
-                 marker
-                 "-END -->)?(.+)"
-                 #_"(?s)^(.*)((?<!```[^\n]*\n)<!-- POLAR-TAGS .+-->)([^<]*)(<!-- POLAR-TAGS-END -->)"))
-         #_"(?sx)(?<pre>.*)(?<open>(?<!```[^\n]*\n)<!--\\ POLAR-TAGS\\ [^-]+-->)(?:(?<middle>.*)<!--\\ POLAR-TAGS-END\\ -->)?(?<post>.+)"
-         #_(re-pattern "(?sx)(?<pre>.*)(?<open>(?<!```[^\\n]*\\n)<!--\\ POLAR-TAGS\\ [^-]+-->)(?:(?<middle>.*)<!--\\ POLAR-TAGS-END\\ -->)?(?<post>.+)")
-         #_(re-pattern (str "POLAR-TAGS\\ "))
-         #_(re-pattern "(?sx)(?<pre>.*)(?<open>(?<!```[^\\n]*\\n))")
-         #_"\n\n<!-- POLAR-TAGS tags=\"Clojure, TIL, Babashka\" -->\n\nTags: [#TIL](https://polar.sh/eval/posts/articles-by-tag#til), [#Clojure](https://polar.sh/eval/posts/articles-by-tag#clojure)\n\n<!-- POLAR-TAGS-END -->"
-         "<paywall>\n
-```
-<!-- POLAR-TAGS tags=\"git, \" a=\"1\" -->
-Tags:
-<!-- POLAR-TAGS-END -->
-```
-
-<!-- POLAR-TAGS tags=\"some,real,tag\" -->
-  To be replaced
-<!-- POLAR-TAGS-END -->")]
-    match) (keys *1)
-
-  (body-parts (count arts) "POLAR-TAGS")
-
-  (def arts (articles {:org "eval"}))
-
-  (:title (second arts))
-  (body-parts (:body (first arts)) "POLAR-TAGS-PAGE")
-
-  (second (re-find (re-pattern (str "(?s)^(.*)(<!-- POLAR-TAGS.+-->)([^<]*)(<!-- POLAR-TAGS-END -->)"))
-                   (keys (body-parts (second arts) "POLAR-TAGS"))))
-
-  (get-article)
-
-  (re-find #"(?<quote>\"\")")
-
-  (re-find #"(?<quote>\")?.+(\k<quote>?)" "foo")
-  (str/split "foo, bar" #",")
-
-  (update (article-comment-attributes {:body "foobar\n<!-- POLAR-TAGS tags=\"git, \" a=\"1\" --> "} "POLAR-TAGS")
-          "tags" #(str/split % #", *"))
-
-  (article-polar-tags {:body ""})
-  (re-named-captures #"(?x)
-(?:\ *)
-(?<key>[^=]+)
-(?:=)
-(?<quote>\")?(?<val>[^\ \"]+)(?:\k<quote>)?" "a=1 foo=bar baz=\"a.b\"")
-
-  (re-seq #"(?x)
-(?<key>[^\r\n\t\f\v= '\"]+)  # capture key
-(?:=      # literal =
-  (?<quote>[\"'])?  # \"
-  ((?:.
-    (?!\k<quote>?\s+(?:\S+)=|\k<quote>))+.)(?:\k<quote>?))?" "hello=\"foo\" other=moar c=d cd=de")
-
-  (re-find #"[\w-]+(?:=\" .+? \"|\b)(?!<)(?=.*?>)" "a=\"a\"")
-
-  (re-find #"(?:=([\"])?())" "a=\"a\"")
-
-  #_:end)
 
 (defn update-article! [{:keys [dry-run] :as _cli-opts} {:keys [title] :as article}]
-  (let [msg (if dry-run "Would update article " "Updating article ")
-        msg (str msg (pr-str title) " " (article-url article) " ")]
+  (let [msg                   (if dry-run "Would update article " "Updating article ")
+        msg                   (str msg (pr-str title) " " (article-url article) " ")
+        prune-namespaced-keys #(->> % (remove (comp namespace key)) (into {}))]
     (print msg)
     (when-not dry-run
-      (put-article article)
+      (put-article (prune-namespaced-keys article))
       (print "...done"))
     (println)))
 
 (def cli-spec
   {:restrict [:org :help :dry-run :tags-page-id]
-   :spec     {:tags-page-id {:desc    "page id of tag listing page"
+   :spec     {:tags-page-id {:desc    "page id of tag listing page (required)"
                              :require true}
               :org          {:desc    "organization_name (required)"
                              :require true}
@@ -558,8 +316,11 @@ Tags:
 
 (defn print-help []
   (println
-   (str "Usage: polar-tags [OPTIONS] \n\nOPTIONS\n"
-        (cli/format-opts (assoc cli-spec :order [:org :days-since-publish :dry-run :help]))
+   (str "CLI that...\n 1) replaces `<!-- POLAR-TAGS tags=\"tag1, tag2\" -->` with links to tags-page\n    in all (unpublished) posts" \newline
+        " 2) replaces `<!-- POLAR-TAGS-LIST -->` with a list of posts per tag" \newline
+        \newline
+        "Usage: polar-tags [OPTIONS] \n\nOPTIONS\n"
+        (cli/format-opts (assoc cli-spec :order [:org :tags-page-id :dry-run :help]))
         \newline \newline
         "ENVIRONMENT VARIABLES" \newline
         "  POLAR_API_TOKEN    token from https://polar.sh/settings"
@@ -569,11 +330,14 @@ Tags:
   (mapcat (comp snippet->tags :v) (blocks (tokenize body) "POLAR-TAGS")))
 
 
+(defn tag-base-url [org slug]
+  (str "https://polar.sh/" org "/posts/" slug "#"))
+
 (defn expand-tag-snippets! [articles cli-opts]
   (->> articles
-       (map (fn [article]
+       (map (fn [{::keys [tag-base-url] :as article}]
               (let [article-changed? #(not= article %)]
-                (whenp (update article :body expand-polar-tags-snippets)
+                (whenp (update article :body #(expand-polar-tags-snippets % {:tag-base-url tag-base-url}))
                        (comp seq :body)
                        article-changed?))))
        (remove nil?)
@@ -597,31 +361,35 @@ Tags:
                          (update :body #(expand-polar-tags-list-snippets % articles-by-tag)))]
     (update-article! cli-opts tags-article)))
 
-(defn -main [{:keys [org help] :as args}]
+(defn org-articles [org {:keys [tags-article-id]}]
+  (let [articles     (get-articles {:org org :show_unpublished true})
+        tags-article (first (filter #(-> % :id (= tags-article-id)) articles))]
+    (->> articles
+         (map (fn [{:keys [id published_at] :as article}]
+                (assoc article
+                       ::tag-base-url (tag-base-url org (:slug tags-article))
+                       ::published? (some? published_at)
+                       ::tags-article? (= id tags-article-id)))))))
+
+(defn -main [{:keys [org help tags-page-id] :as cli-opts}]
   (if help
     (print-help)
-    (let [articles (get-articles {:org org :show_unpublished true})]
-      (expand-tag-snippets! articles args)
-      (update-tag-page! (filter :published_at articles) args))))
+    (let [articles (org-articles org {:tags-article-id tags-page-id})]
+      (expand-tag-snippets! articles cli-opts)
+      (update-tag-page! (filter ::published? articles) cli-opts))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (-main (cli/parse-opts *command-line-args* cli-spec)))
 
 
 (comment
-  (def arts-after (get-articles {:org "eval"}))
+  ;; TODO fail when no env-token
+  ;; TODO have command to find page-id
+  ;; TODO allow for other user
 
-  (last arts-after)
-  (some-> arts
-      first
-      insert-tags-block
-      put-article)
-  (second arts)
-  (body-parts (first arts) "POLAR-TAGS")
-  (map #(body-parts % "POLAR-TAGS") arts)
+  (def articles (get-articles {:show_unpublished true}))
 
-  (cli/parse-opts '("-h")  cli-spec)
-  (cli/parse-opts '() {:spec {:help (get-in cli-spec [:spec :help])}})
-  (put-article {:id "7891ada6-f2d0-46f7-b217-0719e784ecbc" :body "Hello"})
-
+  (def articles (org-articles "eval" {:tags-article-id "a173076c-fc3f-474f-be02-89ec540d20c3"}))
+  (first articles)
+  (count articles)
   #_:end)
