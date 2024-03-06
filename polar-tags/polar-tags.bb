@@ -1,40 +1,9 @@
 #!/usr/bin/env bb
 
-(require '[babashka.http-client :as http]
-         '[cheshire.core :as json]
-         '[clojure.string :as str]
-         '[babashka.cli :as cli])
-
-;; Polar API
-;;
-(defn get-articles [{:keys [org show_unpublished] :as _cli-opts}]
-  {:pre [(some? org)]}
-  (-> "https://api.polar.sh/api/v1/articles/search"
-      (http/get {:query-params {:show_unpublished  (boolean show_unpublished)
-                                :organization_name org
-                                :platform          "github"}
-                 :headers      {"Authorization" (str "Bearer " (System/getenv "POLAR_API_TOKEN"))}})
-      :body
-      (json/parse-string true)
-      :items))
-
-(defn put-article [{:keys [id body]}]
-  (http/put (str "https://api.polar.sh/api/v1/articles/" id)
-            {:body    (json/encode {"body" body})
-             :headers {"Authorization" (str "Bearer " (System/getenv "POLAR_API_TOKEN"))}}))
-
-;; helpers
-;;
-(defn whenp
-  "Yields `v` when it's truthy and all `(pred v)` are truthy as well.
-
-  Examples:
-  (whenp 1 odd? pos?) ;; => 1
-  (whenp coll seq) ;; =>  nil or a collection with at least 1 item"
-  ([v] v)
-  ([v & preds]
-   (when (and v ((apply every-pred preds) v))
-     v)))
+(require '[clojure.string :as str]
+         '[babashka.cli :as cli]
+         '[polar.api :as pa]
+         '[eval.util :refer [whenp]])
 
 (defn snippet-atts [snippet]
   (when-let [[_ atts]    (re-find #"<!-- +[A-Z-_]+ (.+) -->" snippet)]
@@ -280,17 +249,14 @@
     (apply str vals)
     body))
 
-(remove (comp namespace key) {::a 1 :foo 2 :b 3})
-
-
 (defn update-article! [{:keys [dry-run] :as _cli-opts} {:keys [title] :as article}]
   (let [msg                   (if dry-run "Would update article " "Updating article ")
         msg                   (str msg (pr-str title) " " (article-url article) " ")
         prune-namespaced-keys #(->> % (remove (comp namespace key)) (into {}))]
     (print msg)
-    (when-not dry-run
-      (put-article (prune-namespaced-keys article))
-      (print "...done"))
+    (when dry-run
+      (print "...done")
+      (pa/put-article (prune-namespaced-keys article)))
     (println)))
 
 (def cli-spec
@@ -329,7 +295,6 @@
 (defn article->tags [{:keys [body] :as _article}]
   (mapcat (comp snippet->tags :v) (blocks (tokenize body) "POLAR-TAGS")))
 
-
 (defn tag-base-url [org slug]
   (str "https://polar.sh/" org "/posts/" slug "#"))
 
@@ -362,7 +327,7 @@
     (update-article! cli-opts tags-article)))
 
 (defn org-articles [org {:keys [tags-article-id]}]
-  (let [articles     (get-articles {:org org :show_unpublished true})
+  (let [articles     (pa/get-articles {:org org :show_unpublished true})
         tags-article (first (filter #(-> % :id (= tags-article-id)) articles))]
     (->> articles
          (map (fn [{:keys [id published_at] :as article}]
@@ -387,7 +352,7 @@
   ;; TODO have command to find page-id
   ;; TODO allow for other user
 
-  (def articles (get-articles {:show_unpublished true}))
+  (def articles (pa/get-articles {:org "eval" :show_unpublished true}))
 
   (def articles (org-articles "eval" {:tags-article-id "a173076c-fc3f-474f-be02-89ec540d20c3"}))
   (first articles)

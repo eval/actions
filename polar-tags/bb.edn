@@ -1,0 +1,1 @@
+{:deps {actions/shared {:local/root "../shared"}}}
