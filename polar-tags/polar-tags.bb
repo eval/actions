@@ -86,7 +86,9 @@
 
 (defn lex-snippet [lexer]
   (cond
-    (eos? lexer)                     (-> lexer (emit-token :text) (dissoc :state))
+    (eos? lexer)                     (-> lexer
+                                         (emit-token :text)
+                                         (dissoc :state))
     (coming-up? lexer snippet-close) (-> lexer
                                          (read-char (count snippet-close))
                                          (emit-token :snippet)
@@ -95,9 +97,14 @@
 
 (defn lex-code [lexer]
   (cond
-    (eos? lexer)                   (-> lexer (emit-token :text) (dissoc :state))
-    (coming-up? lexer code-fences) (-> lexer (read-char (count code-fences)) (emit-token :code) (assoc-state :return))
-    :else (read-char lexer)))
+    (eos? lexer)                   (-> lexer
+                                       (emit-token :text)
+                                       (dissoc :state))
+    (coming-up? lexer code-fences) (-> lexer
+                                       (read-char (count code-fences))
+                                       (emit-token :code)
+                                       (assoc-state :return))
+    :else                          (read-char lexer)))
 
 (defn lex-text [lexer]
   (cond
@@ -260,21 +267,18 @@
     (println)))
 
 (def cli-spec
-  {:restrict [:org :help :dry-run :tags-page-id]
-   :spec     {:tags-page-id {:desc    "page id of tag listing page (required)"
-                             :require true}
-              :org          {:desc    "organization_name (required)"
-                             :require true}
-              :help         {:coerce :boolean :alias :h}
-              :dry-run      {:coerce :boolean
-                             :desc   "Print candidate articles, don't make changes."}}
+  {:restrict [:org :help :dry-run]
+   :spec     {:org     {:desc    "organization_name (required)"
+                        :require true}
+              :help    {:coerce :boolean :alias :h}
+              :dry-run {:coerce :boolean
+                        :desc   "Print candidate articles, don't make changes."}}
    :error-fn (fn [{:keys [opts spec type cause msg option] :as data}]
                (when-not ((some-fn :help :version) opts)
                  (if (= :org.babashka/cli type)
                    (case cause
                      :require
-                     (println
-                      (format "Missing required argument:\n%s"
+                     (println (format "Missing required argument:\n%s"
                               (cli/format-opts {:spec (select-keys spec [option])})))
                      (println msg))
                    (throw (ex-info msg data)))
@@ -286,7 +290,7 @@
         " 2) replaces `<!-- POLAR-TAGS-LIST -->` with a list of posts per tag" \newline
         \newline
         "Usage: polar-tags [OPTIONS] \n\nOPTIONS\n"
-        (cli/format-opts (assoc cli-spec :order [:org :tags-page-id :dry-run :help]))
+        (cli/format-opts (assoc cli-spec :order [:org :dry-run :help]))
         \newline \newline
         "ENVIRONMENT VARIABLES" \newline
         "  POLAR_API_TOKEN    token from https://polar.sh/settings"
@@ -317,24 +321,26 @@
        (reduce (fn [acc {:keys [tags] :as article}]
                  (merge-with into acc (zipmap tags (repeat [article])))) {})))
 
-(defn article-by-id [articles id]
-  (first (filter (comp #(= id %) :id) articles)))
-
-(defn update-tag-page! [articles {:keys [tags-page-id] :as cli-opts}]
+(defn update-tag-page! [articles cli-opts]
   (let [articles-by-tag (sort-by (comp str/lower-case key) (articles-by-tag articles))
-        tags-article    (-> (article-by-id articles tags-page-id)
-                         (update :body #(expand-polar-tags-list-snippets % articles-by-tag)))]
+        tags-article    (-> articles
+                            (->> (filter ::tags-article?))
+                            first
+                            (update :body #(expand-polar-tags-list-snippets % articles-by-tag)))]
     (update-article! cli-opts tags-article)))
 
-(defn org-articles [org {:keys [tags-article-id]}]
+(defn tags-article? [{:keys [body]}]
+  (seq (blocks (tokenize body) "POLAR-TAGS-LIST")))
+
+(defn org-articles [org]
   (let [articles     (pa/get-articles {:org org :show_unpublished true})
-        tags-article (first (filter #(-> % :id (= tags-article-id)) articles))]
+        tags-article (first (filter tags-article? articles))]
     (->> articles
-         (map (fn [{:keys [id published_at] :as article}]
-                (assoc article
+         (map (fn [{:keys [published_at] :as article}]
+                (assoc article ;; add some app-data
                        ::tag-base-url (tag-base-url org (:slug tags-article))
                        ::published? (some? published_at)
-                       ::tags-article? (= id tags-article-id)))))))
+                       ::tags-article? (= article tags-article)))))))
 
 (defn validate-env!
   "Rationale: Having no token won't instantly fail: fetching articles will only get you published items, but an update would eventually fail."
@@ -343,28 +349,28 @@
     (print-error "Missing env-var POLAR_API_TOKEN")
     (System/exit 1)))
 
-(defn -main [{:keys [org help tags-page-id] :as cli-opts}]
+(defn -main [{:keys [org help] :as cli-opts}]
   (if help
     (print-help)
     (do
       (validate-env!)
-      (let [articles (org-articles org {:tags-article-id tags-page-id})]
+      (let [articles (org-articles org)]
         (expand-tag-snippets! articles cli-opts)
         (update-tag-page! (filter ::published? articles) cli-opts)))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (-main (cli/parse-opts *command-line-args* cli-spec)))
 
-
 (comment
   ;; DONE fail when no env-token
-  ;; TODO have command to find page-id
+  ;; DONE have command to find page-id
   ;; DONE allow for other user
 
   (def articles (pa/get-articles {:org "eval" :show_unpublished true}))
   (count articles)
 
-  (def articles (org-articles "eval" {:tags-article-id "a173076c-fc3f-474f-be02-89ec540d20c3"}))
-  (first articles)
+  (def articles (org-articles "eval"))
+  articles
+  (filter tags-article? articles)
   (count articles)
   #_:end)
