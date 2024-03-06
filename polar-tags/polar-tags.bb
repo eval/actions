@@ -5,27 +5,6 @@
          '[polar.api :as pa]
          '[eval.util :refer [whenp]])
 
-(defn snippet-atts [snippet]
-  (when-let [[_ atts]    (re-find #"<!-- +[A-Z-_]+ (.+) -->" snippet)]
-    (let [att-matches (re-seq #"(?x)
-                             (?<key>[^=]+)
-                             (?:=)
-                             (?<quote>\")?
-                             (?<val>[^\"]+)(?:\k<quote>?)\ *"
-                              atts)]
-      (reduce
-       (fn [acc [_all k _quote v]]
-         (assoc acc k v))
-       {} att-matches))))
-
-(defn tag->md-link [base-url tag]
-  (let [tag->anchor (fn [t] (-> t str/lower-case (str/replace  #" " "-")))]
-    (str "[#" tag "](" base-url (tag->anchor tag) ")")))
-
-
-(defn inner-tags-block [tags {:keys [tag-base-url]}]
-  (str "**Tags:** " (str/join ", " (map #(tag->md-link tag-base-url %) tags))))
-
 ;; lexer
 ;;
 (def code-fences "```")
@@ -151,6 +130,27 @@
   (:tokens (tokenize* s)))
 
 ;; /lexer
+
+
+(defn snippet-atts [snippet]
+  (when-let [[_ atts]    (re-find #"<!-- +[A-Z-_]+ (.+) -->" snippet)]
+    (let [att-matches (re-seq #"(?x)
+                             (?<key>[^=]+)
+                             (?:=)
+                             (?<quote>\")?
+                             (?<val>[^\"]+)(?:\k<quote>?)\ *"
+                              atts)]
+      (reduce
+       (fn [acc [_all k _quote v]]
+         (assoc acc k v))
+       {} att-matches))))
+
+(defn tag->md-link [base-url tag]
+  (let [tag->anchor (fn [t] (-> t str/lower-case (str/replace  #" " "-")))]
+    (str "[#" tag "](" base-url (tag->anchor tag) ")")))
+
+(defn inner-tags-block [tags {:keys [tag-base-url]}]
+  (str "**Tags:** " (str/join ", " (map #(tag->md-link tag-base-url %) tags))))
 
 (defn blocks [tokens marker]
   (let [snippet?           (comp #(= % :snippet) :t)
