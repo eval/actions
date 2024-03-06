@@ -28,7 +28,7 @@ See [CLI documentation](./polar-strip-paywall/README.md).
 
 ### [Polar](https://polar.sh/): tag posts
 
-[Example](https://polar.sh/eval/posts/articles-by-tag):
+Inserts tags and lists articles by tag. [Example](https://polar.sh/eval/posts/articles-by-tag):
 
 ![Screenshot 2024-03-06 at 11 10 53](https://github.com/eval/actions/assets/290596/7e7edd33-e332-4c79-8ed9-00fa8aed25e8)
 
