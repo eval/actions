@@ -2,8 +2,8 @@
 
 (require '[clojure.string :as str]
          '[babashka.cli :as cli]
-         '[polar.api :as pa]
-         '[eval.util :refer [whenp]])
+         '[polar.api :as pa] :reload :verbose
+         '[eval.util :refer [whenp print-error]])
 
 ;; lexer
 ;;
@@ -336,23 +336,33 @@
                        ::published? (some? published_at)
                        ::tags-article? (= id tags-article-id)))))))
 
+(defn validate-env!
+  "Rationale: Having no token won't instantly fail: fetching articles will only get you published items, but an update would eventually fail."
+  []
+  (when-not (System/getenv "POLAR_API_TOKEN")
+    (print-error "Missing env-var POLAR_API_TOKEN")
+    (System/exit 1)))
+
 (defn -main [{:keys [org help tags-page-id] :as cli-opts}]
   (if help
     (print-help)
-    (let [articles (org-articles org {:tags-article-id tags-page-id})]
-      (expand-tag-snippets! articles cli-opts)
-      (update-tag-page! (filter ::published? articles) cli-opts))))
+    (do
+      (validate-env!)
+      (let [articles (org-articles org {:tags-article-id tags-page-id})]
+        (expand-tag-snippets! articles cli-opts)
+        (update-tag-page! (filter ::published? articles) cli-opts)))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (-main (cli/parse-opts *command-line-args* cli-spec)))
 
 
 (comment
-  ;; TODO fail when no env-token
+  ;; DONE fail when no env-token
   ;; TODO have command to find page-id
-  ;; TODO allow for other user
+  ;; DONE allow for other user
 
   (def articles (pa/get-articles {:org "eval" :show_unpublished true}))
+  (count articles)
 
   (def articles (org-articles "eval" {:tags-article-id "a173076c-fc3f-474f-be02-89ec540d20c3"}))
   (first articles)

@@ -10,3 +10,7 @@
   ([v & preds]
    (when (and v ((apply every-pred preds) v))
      v)))
+
+(defn print-error [& msgs]
+  (binding [*out* *err*]
+    (apply println msgs)))
