@@ -15,7 +15,7 @@ CLI that aids tagging Polar posts. [Example](https://polar.sh/eval/posts/article
 1. Tag a post  
   Insert `<!-- POLAR-TAGS tags="tag1, some other tag" -->` in a post.  
   **NOTE**: Make sure to use double quotes even when having one tag.
-1. Create a post listing the tags  
+1. Create a post listing all tags  
   ...insert `<!-- POLAR-TAGS-LIST -->` and publish.
 1. Run the CLI  
   `$ bb polar-tags.bb --org your-org`  
