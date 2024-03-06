@@ -228,7 +228,7 @@
          \newline
          (str/join \newline (map expand-tag articles-by-tag)) \newline
          \newline
-         "<sub>Powered by [eval/actions#polar-tags](https://github.com/eval/actions/blob/main/polar-tags/README.md). Generated at " (java.util.Date.) "</sub>" \newline
+         "<sub>Powered by [eval/actions#polar-tags](https://github.com/eval/actions/blob/main/README.md#polar-tag-posts). Generated at " (java.util.Date.) "</sub>" \newline
          "<!-- POLAR-TAGS-LIST-END -->")))
 
 (defn expand-polar-tags-snippets
