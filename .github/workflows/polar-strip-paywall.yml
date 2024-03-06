@@ -1,5 +1,4 @@
 name: PolarStripPaywall
-description: Strip paywall snippets from Polar articles X days after publishing.
 
 on:
   # Run after every push

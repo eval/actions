@@ -1,5 +1,4 @@
 name: PolarTags
-description: Update tag-snippets
 
 on:
   workflow_dispatch:
