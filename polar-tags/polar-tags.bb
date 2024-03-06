@@ -228,7 +228,7 @@
          \newline
          (str/join \newline (map expand-tag articles-by-tag)) \newline
          \newline
-         "<sub>Updated at " (java.util.Date.) "</sub>" \newline
+         "<sub>Powered by [eval/actions#polar-tags](https://github.com/eval/actions/blob/main/polar-tags/README.md). Generated at " (java.util.Date.) "</sub>" \newline
          "<!-- POLAR-TAGS-LIST-END -->")))
 
 (defn expand-polar-tags-snippets
@@ -273,7 +273,7 @@
                         :require true}
               :help    {:coerce :boolean :alias :h}
               :dry-run {:coerce :boolean
-                        :desc   "Print candidate articles, don't make changes."}}
+                        :desc   "Print articles that would change, don't make changes."}}
    :error-fn (fn [{:keys [opts spec type cause msg option] :as data}]
                (when-not ((some-fn :help :version) opts)
                  (if (= :org.babashka/cli type)
@@ -290,7 +290,7 @@
    (str "CLI that...\n 1) replaces `<!-- POLAR-TAGS tags=\"tag1, tag2\" -->` with links to tags-page\n    in all (unpublished) posts" \newline
         " 2) replaces `<!-- POLAR-TAGS-LIST -->` with a list of posts per tag" \newline
         \newline
-        "Usage: polar-tags [OPTIONS] \n\nOPTIONS\n"
+        "Usage: bb polar-tags.bb [OPTIONS] \n\nOPTIONS\n"
         (cli/format-opts (assoc cli-spec :order [:org :dry-run :help]))
         \newline \newline
         "ENVIRONMENT VARIABLES" \newline
