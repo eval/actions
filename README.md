@@ -17,7 +17,7 @@ jobs:
       - name: StripIt
         uses: eval/actions/polar-strip-paywall@main
         with:
-          org: eval
+          org: your-org
           days-since-publish: 7
         env:
           POLAR_API_TOKEN: ${{ secrets.POLAR_API_TOKEN }}
@@ -39,7 +39,7 @@ See [CLI documentation](./polar-strip-paywall/README.md).
   **NOTE**: Make sure to use double quotes even when having one tag.
 1. Create a post listing all tags  
   ...insert `<!-- POLAR-TAGS-LIST -->` and publish.
-1. Add the following action
+1. Run the following job
 
 ``` yaml
 jobs:
@@ -50,7 +50,7 @@ jobs:
       - name: Update tag-snippets
         uses: eval/actions/polar-tags@main
         with:
-          org: eval
+          org: your-org
         env:
           POLAR_API_TOKEN: ${{ secrets.POLAR_API_TOKEN }}
 ```
