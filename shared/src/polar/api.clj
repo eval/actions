@@ -3,11 +3,12 @@
             [cheshire.core :as json]))
 
 
-(defn get-articles [{:keys [org show_unpublished] :as _cli-opts}]
+(defn get-articles [{:keys [org show_unpublished limit] :or {limit 10} :as _cli-opts}]
   {:pre [(some? org)]}
   (-> "https://api.polar.sh/api/v1/articles/search"
       (http/get {:query-params {:show_unpublished  (boolean show_unpublished)
                                 :organization_name org
+                                :limit             limit
                                 :platform          "github"}
                  :headers      {"Authorization" (str "Bearer " (System/getenv "POLAR_API_TOKEN"))}})
       :body

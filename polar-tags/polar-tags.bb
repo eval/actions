@@ -257,11 +257,12 @@
     body))
 
 (defn update-article! [{:keys [dry-run] :as _cli-opts} {:keys [title] :as article}]
+  #_(prn :cli-opts _cli-opts)
   (let [msg                   (if dry-run "Would update article " "Updating article ")
         msg                   (str msg (pr-str title) " " (article-url article) " ")
         prune-namespaced-keys #(->> % (remove (comp namespace key)) (into {}))]
     (print msg)
-    (when dry-run
+    (if dry-run
       (print "...done")
       (pa/put-article (prune-namespaced-keys article)))
     (println)))
@@ -333,7 +334,7 @@
   (seq (blocks (tokenize body) "POLAR-TAGS-LIST")))
 
 (defn org-articles [org]
-  (let [articles     (pa/get-articles {:org org :show_unpublished true})
+  (let [articles     (pa/get-articles {:org org :show_unpublished true :limit 100})
         tags-article (first (filter tags-article? articles))]
     (->> articles
          (map (fn [{:keys [published_at] :as article}]
@@ -366,7 +367,7 @@
   ;; DONE have command to find page-id
   ;; DONE allow for other user
 
-  (def articles (pa/get-articles {:org "eval" :show_unpublished true}))
+  (def articles (pa/get-articles {:org "eval" :show_unpublished true :limit 100}))
   (count articles)
 
   (def articles (org-articles "eval"))
