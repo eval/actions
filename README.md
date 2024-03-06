@@ -2,6 +2,10 @@
 
 Collection of handy GitHub actions.
 
+<p align="center">
+<a href="https://polar.sh/eval/actions"><picture><source media="(prefers-color-scheme: dark)" srcset="https://polar.sh/embed/subscribe.svg?org=eval&label=Subscribe&darkmode"><img alt="Subscribe on Polar" src="https://polar.sh/embed/subscribe.svg?org=eval&label=Subscribe"></picture></a>
+</p>
+
 ## Usage
 
 ### [Polar](https://polar.sh/): strip paywall
@@ -24,7 +28,8 @@ jobs:
 ```
 
 See also this [dogfooding workflow](https://github.com/eval/actions/blob/main/.github/workflows/polar-strip-paywall.yml).  
-See [CLI documentation](./polar-strip-paywall/README.md).
+See [CLI documentation](./polar-strip-paywall/README.md).  
+[Sponsor me](https://polar.sh/eval/subscriptions) if this action provided value 🙏🏻
 
 ### [Polar](https://polar.sh/): tag posts
 
@@ -56,4 +61,5 @@ jobs:
 ```
 
 See also this [dogfooding workflow](https://github.com/eval/actions/blob/main/.github/workflows/polar-tags.yml).  
-See [CLI documentation](./polar-tags/README.md).
+See [CLI documentation](./polar-tags/README.md).  
+[Sponsor me](https://polar.sh/eval/subscriptions) if this action provided value 🙏🏻
