@@ -355,9 +355,8 @@
     (print-help)
     (do
       (validate-env!)
-      (let [articles (org-articles org)]
-        (expand-tag-snippets! articles cli-opts)
-        (update-tag-page! (filter ::published? articles) cli-opts)))))
+      (expand-tag-snippets! (org-articles org) cli-opts)
+      (update-tag-page! (filter ::published? (org-articles org)) cli-opts))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (-main (cli/parse-opts *command-line-args* cli-spec)))
