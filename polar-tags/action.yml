@@ -1,0 +1,22 @@
+name: 'PolarTags'
+description: 'Update tag-snippets'
+
+branding:
+  icon: scissors
+  color: red
+
+inputs:
+  org:
+    description: Organization name on GitHub
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install clojure tools
+      uses: DeLaGuardo/setup-clojure@9.4
+      with:
+        bb: latest
+    - name: Run
+      run: bb ${{ github.action_path }}/polar-tags.bb --org ${{ inputs.org }}
+      shell: bash
