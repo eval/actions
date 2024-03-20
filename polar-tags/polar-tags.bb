@@ -153,7 +153,9 @@
        {} att-matches))))
 
 (defn tag->md-link [base-url tag]
-  (let [tag->anchor (fn [t] (-> t str/lower-case (str/replace  #" " "-")))]
+  (let [tag->anchor (fn [t] (-> t str/lower-case
+                                (str/replace  #" " "-")
+                                (str/replace  #"/" "")))]
     (str "[#" tag "](" base-url (tag->anchor tag) ")")))
 
 (defn inner-tags-block [tags {:keys [tag-base-url]}]
