@@ -1,6 +1,8 @@
 name: PolarStripPaywall
 
 on:
+  workflow_dispatch:
+
   # Run after every push
   push:
     branches: ["main"]

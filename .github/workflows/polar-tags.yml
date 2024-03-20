@@ -3,6 +3,9 @@ name: PolarTags
 on:
   workflow_dispatch:
 
+  push:
+    branches: ["main"]
+
   # Daily at 07:00
   schedule:
     - cron: "0 7 * * *"
