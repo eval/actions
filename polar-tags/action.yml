@@ -6,7 +6,10 @@ branding:
   color: red
 
 inputs:
-  org:
+  org-id:
+    description: Organization id on Polar
+    required: true
+  org-slug:
     description: Organization name on GitHub
     required: true
 
@@ -18,5 +21,5 @@ runs:
       with:
         bb: latest
     - name: Run
-      run: bb ${{ github.action_path }}/polar-tags.bb --org ${{ inputs.org }}
+      run: bb ${{ github.action_path }}/polar-tags.bb --org-slug ${{ inputs.org-slug }} --org-id ${{inputs.org-id}}
       shell: bash

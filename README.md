@@ -55,7 +55,8 @@ jobs:
       - name: Update tag-snippets
         uses: eval/actions/polar-tags@main
         with:
-          org: your-org
+          org-slug: your-org
+          org-id: the-polar-uuid
         env:
           POLAR_API_TOKEN: ${{ secrets.POLAR_API_TOKEN }}
 ```

@@ -18,6 +18,7 @@ jobs:
       - name: Update tag-snippets
         uses: eval/actions/polar-tags@main
         with:
-          org: eval
+          org-slug: eval
+          org-id: 3d22d99d-8b56-4635-b0ca-a24701687ffd 
         env:
           POLAR_API_TOKEN: ${{ secrets.POLAR_API_TOKEN }}

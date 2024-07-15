@@ -270,19 +270,21 @@
     (println)))
 
 (def cli-spec
-  {:restrict [:org :help :dry-run]
-   :spec     {:org     {:desc    "organization_name (required)"
-                        :require true}
-              :help    {:coerce :boolean :alias :h}
-              :dry-run {:coerce :boolean
-                        :desc   "Print articles that would change, don't make changes."}}
+  {:restrict [:org-slug :org-id :help :dry-run]
+   :spec     {:org-slug {:desc    "organization_name (required)"
+                         :require true}
+              :org-id   {:desc    "organization_id (required)"
+                         :require true}
+              :help     {:coerce :boolean :alias :h}
+              :dry-run  {:coerce :boolean
+                         :desc   "Print articles that would change, don't make changes."}}
    :error-fn (fn [{:keys [opts spec type cause msg option] :as data}]
                (when-not ((some-fn :help :version) opts)
                  (if (= :org.babashka/cli type)
                    (case cause
                      :require
                      (println (format "Missing required argument:\n%s"
-                              (cli/format-opts {:spec (select-keys spec [option])})))
+                                      (cli/format-opts {:spec (select-keys spec [option])})))
                      (println msg))
                    (throw (ex-info msg data)))
                  (System/exit 1)))})
@@ -335,13 +337,13 @@
 (defn tags-article? [{:keys [body]}]
   (seq (blocks (tokenize body) "POLAR-TAGS-LIST")))
 
-(defn org-articles [org]
-  (let [articles     (pa/get-articles {:org org :show_unpublished true :limit 100})
+(defn org-articles [{:keys [org-slug org-id]}]
+  (let [articles     (pa/get-articles {:org org-id :show_unpublished true :limit 100})
         tags-article (first (filter tags-article? articles))]
     (->> articles
          (map (fn [{:keys [published_at] :as article}]
                 (assoc article ;; add some app-data
-                       ::tag-base-url (tag-base-url org (:slug tags-article))
+                       ::tag-base-url (tag-base-url org-slug (:slug tags-article))
                        ::published? (some? published_at)
                        ::tags-article? (= article tags-article)))))))
 
@@ -352,13 +354,13 @@
     (print-error "Missing env-var POLAR_API_TOKEN")
     (System/exit 1)))
 
-(defn -main [{:keys [org help] :as cli-opts}]
+(defn -main [{:keys [org-id org-slug help] :as cli-opts}]
   (if help
     (print-help)
     (do
       (validate-env!)
-      (expand-tag-snippets! (org-articles org) cli-opts)
-      (update-tag-page! (filter ::published? (org-articles org)) cli-opts))))
+      (expand-tag-snippets! (org-articles cli-opts) cli-opts)
+      (update-tag-page! (filter ::published? (org-articles cli-opts)) cli-opts))))
 
 (when (= *file* (System/getProperty "babashka.file"))
   (-main (cli/parse-opts *command-line-args* cli-spec)))
@@ -368,7 +370,8 @@
   ;; DONE have command to find page-id
   ;; DONE allow for other user
 
-  (def articles (pa/get-articles {:org "eval" :show_unpublished true :limit 100}))
+  (def articles (pa/get-articles {:org "3d22d99d-8b56-4635-b0ca-a24701687ffd" :show_unpublished true :limit 100}))
+  (count articles)
   (count articles)
 
   (def articles (org-articles "eval"))
